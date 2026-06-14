@@ -1,5 +1,7 @@
 # tmux-claude-session-manager
 
+[![screenshot](./docs/screenshot.jpg)](https://youtu.be/NnTV6r4l5D0)
+
 Run many [Claude Code](https://claude.com/claude-code) sessions across your
 projects, each in its own tmux session — then **list them, see which are done
 vs. still working, and jump to one** from a single popup.
@@ -167,6 +169,9 @@ set -g @claude_popup_height    '90%'     # popup height
 - The **picker** lists sessions matching the prefix, reads their state and a live
   `capture-pane` preview, and on selection moves your client to the session's
   origin window before resuming it in the popup.
+- Pressing `prefix` + `u` **from inside a session popup** detaches that popup
+  first (closing it), then reopens the picker full-size on the outer host client —
+  so you never end up with a cramped popup-in-popup.
 
 ## License
 
