@@ -16,8 +16,13 @@ h="$(get_tmux_option @claude_popup_height '90%')"
 
 session="${prefix}$(session_hash "$path")"
 
-tmux has-session -t "$session" 2>/dev/null \
-  || tmux new-session -d -s "$session" -c "$path" "$cmd"
+if [[ "$(tmux display-message -p '#S')" == "$prefix"* ]]; then
+  tmux display-message '🫪 Popup window already open'
+  exit 0
+fi
+
+tmux has-session -t "$session" 2>/dev/null ||
+  tmux new-session -d -s "$session" -c "$path" "$cmd"
 
 # Record which window launched it, so the picker can jump back here later.
 [ -n "$window" ] && tmux set-option -t "$session" @claude_origin "$window"
