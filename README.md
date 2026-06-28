@@ -154,14 +154,14 @@ Set any of these before the plugin loads (defaults shown):
 set -g @claude_launch_key     'y'        # prefix key: launch/open for current dir
 set -g @claude_list_key       'u'        # prefix key: open the picker
 set -g @claude_command        'claude'   # command run in new sessions
-set -g @claude_session_prefix 'claude-'  # tmux session name prefix
+set -g @claude_session_prefix 'c-'       # tmux session name prefix
 set -g @claude_popup_width     '90%'     # popup width
 set -g @claude_popup_height    '90%'     # popup height
 ```
 
 ## How it works
 
-- The **launcher** creates a detached `claude-<hash-of-dir>` tmux session running
+- The **launcher** creates a detached `c-<dir-name>` tmux session running
   `claude`, records the window it came from in `@claude_origin`, and attaches to
   it in a popup.
 - The **hooks** set `@claude_state` / `@claude_state_at` on each session as Claude
