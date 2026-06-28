@@ -12,12 +12,18 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 prefix="$(get_tmux_option @claude_session_prefix 'c-')"
 
 emit_rows() {
-  local now s state at path icon rank ago
+  local now s state at path name parent label icon rank ago
   now=$(date +%s)
   tmux list-sessions -F '#{session_name}' 2>/dev/null | grep "^${prefix}" | while IFS= read -r s; do
     state=$(tmux show-options -qv -t "$s" @claude_state 2>/dev/null)
     at=$(tmux show-options -qv -t "$s" @claude_state_at 2>/dev/null)
     path=$(tmux display-message -p -t "$s" '#{pane_current_path}' 2>/dev/null)
+    # Paths share a common prefix, so show the dir name plus its parent's name to
+    # tell sessions apart: e.g. "api  myproject".
+    name="${path##*/}"
+    parent="${path%/*}"
+    parent="${parent##*/}"
+    label="$name  $parent"
     case "$state" in
     waiting) icon=$'\033[33m●\033[0m waiting' rank=0 ;; # yellow - needs input
     idle) icon=$'\033[32m●\033[0m idle   ' rank=1 ;;    # green  - done, your turn
@@ -25,8 +31,8 @@ emit_rows() {
     *) icon=$'\033[90m●\033[0m   ?    ' rank=2 ;;       # grey   - unknown (no hook yet)
     esac
     if [ -n "$at" ]; then ago="$(((now - at) / 60))m"; else ago='-'; fi
-    # rank \t session \t icon \t age \t path   (rank/session hidden via --with-nth)
-    printf '%s\t%s\t%s\t%5s\t%s\n' "$rank" "$s" "$icon" "$ago" "${path/#$HOME/~}"
+    # rank \t session \t icon \t age \t label   (rank/session hidden via --with-nth)
+    printf '%s\t%s\t%s\t%5s\t%s\n' "$rank" "$s" "$icon" "$ago" "$label"
     # rank asc (attention-needed floats up), then age asc so the session that
     # finished just now sits at the top of its group. -k4,4n reads the leading
     # number of the age field ("5m" -> 5; "-" -> 0).
