@@ -9,12 +9,12 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 path="${1:-$PWD}"
 window="${2:-}"
 
-prefix="$(get_tmux_option @claude_session_prefix 'claude-')"
+prefix="$(get_tmux_option @claude_session_prefix 'c-')"
 cmd="$(get_tmux_option @claude_command 'claude')"
 w="$(get_tmux_option @claude_popup_width '90%')"
 h="$(get_tmux_option @claude_popup_height '90%')"
 
-session="${prefix}$(session_hash "$path")"
+session="${prefix}$(session_name "$path")"
 
 if [[ "$(tmux display-message -p '#S')" == "$prefix"* ]]; then
   tmux display-message '🫪 Popup window already open'
