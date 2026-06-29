@@ -156,7 +156,36 @@ set -g @claude_command        'claude'   # command run in new sessions
 set -g @claude_session_prefix 'c-'       # tmux session name prefix
 set -g @claude_popup_width     '90%'     # popup width
 set -g @claude_popup_height    '90%'     # popup height
+set -g @claude_bell           'on'       # ring the bell when a session waits ('off' to disable)
+set -g @claude_waiting_icon   '⏳'       # prefix for the status-bar waiting count
+set -g @claude_waiting_style  'fg=colour231,bg=red,bold' # tmux style for the count (add ',blink', or 'none')
 ```
+
+## Waiting alerts (optional)
+
+Two ways to notice a backgrounded session that needs you:
+
+**Terminal bell** — when a session starts `waiting` (a permission prompt or a
+question), `state.sh` writes a `BEL` to every attached client's tty. That tty is
+your SSH pty, so the bell travels back and rings your **local** terminal — not the
+remote server — wherever you're attached from. It needs the `waiting` hooks (see
+above) and is on by default; disable with `set -g @claude_bell 'off'`.
+
+**Status-bar count** — show how many sessions are waiting right in your status
+line (nothing is shown when none are):
+
+```tmux
+set -ag status-right '#(~/.tmux/plugins/tmux-claude-session-manager/scripts/status.sh)'
+```
+
+The count is derived live from each session's pane (same logic as the picker) and
+refreshes on tmux's `status-interval`, so it never goes stale. It's emitted with a
+tmux style (white-on-**red background**, bold by default) so it stands out;
+customize it with `@claude_waiting_style` — e.g. add `,blink`, or set it to
+`none` for no styling.
+
+> A lower `status-interval` (e.g. `set -g status-interval 2`) makes both the count
+> and `blink` feel more responsive.
 
 ## How it works
 
