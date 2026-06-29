@@ -18,9 +18,23 @@ prefix="$(get_tmux_option @claude_session_prefix 'c-')"
 # detect_state (live status from the pane) lives in helpers.sh, shared with the
 # status-bar counter.
 
+# human_age <seconds> -> compact relative age that switches units as it grows:
+#   45m   (under an hour)   5h   (under a day)   3d15h / 8d   (a day or more)
+human_age() {
+  local s="$1" d h
+  if [ "$s" -lt 3600 ]; then
+    printf '%dm' "$((s / 60))"
+  elif [ "$s" -lt 86400 ]; then
+    printf '%dh' "$((s / 3600))"
+  else
+    d=$((s / 86400)) h=$(((s % 86400) / 3600))
+    if [ "$h" -gt 0 ]; then printf '%dd%dh' "$d" "$h"; else printf '%dd' "$d"; fi
+  fi
+}
+
 emit_rows() {
   local scope="${1:-}"
-  local now s state at path name parent label icon rank ago
+  local now s state at path name parent label icon rank ago secs
   now=$(date +%s)
   tmux list-sessions -F '#{session_name}' 2>/dev/null | grep "^${prefix}" | while IFS= read -r s; do
     path=$(tmux display-message -p -t "$s" '#{pane_current_path}' 2>/dev/null)
@@ -40,13 +54,15 @@ emit_rows() {
     working) icon=$'\033[31m●\033[0m working' rank=3 ;; # red    - busy, leave it
     *) icon=$'\033[90m●\033[0m   ?    ' rank=2 ;;       # grey   - unknown (no hook yet)
     esac
-    if [ -n "$at" ]; then ago="$(((now - at) / 60))m"; else ago='-'; fi
-    # rank \t session \t icon \t age \t label   (rank/session hidden via --with-nth)
-    printf '%s\t%s\t%s\t%5s\t%s\n' "$rank" "$s" "$icon" "$ago" "$label"
-    # rank asc (attention-needed floats up), then age asc so the session that
-    # finished just now sits at the top of its group. -k4,4n reads the leading
-    # number of the age field ("5m" -> 5; "-" -> 0).
-  done | sort -t$'\t' -k1,1n -k4,4n
+    if [ -n "$at" ]; then secs=$((now - at)) ago="$(human_age "$secs")"; else secs=0 ago='-'; fi
+    # rank \t session \t secs \t icon \t age \t label
+    # rank/session/secs are hidden via --with-nth; secs is the real (seconds) age
+    # used for sorting, since the displayed age mixes units (m/h/d) and can't be
+    # compared numerically.
+    printf '%s\t%s\t%s\t%s\t%5s\t%s\n' "$rank" "$s" "$secs" "$icon" "$ago" "$label"
+    # rank asc (attention-needed floats up), then age asc (by secs) so the session
+    # that finished just now sits at the top of its group.
+  done | sort -t$'\t' -k1,1n -k3,3n
 }
 
 [ "${1:-}" = '--list' ] && {
@@ -65,7 +81,7 @@ self="${BASH_SOURCE[0]}"
 header='Claude sessions · enter: jump · ctrl-x: kill'
 [ -n "$scope" ] && header="Claude · dir: ${scope//|/, } · enter: jump · ctrl-x: kill"
 export FZF_DEFAULT_OPTS=''
-sel=$(emit_rows "$scope" | fzf --ansi --delimiter='\t' --with-nth=3,4,5 \
+sel=$(emit_rows "$scope" | fzf --ansi --delimiter='\t' --with-nth=4,5,6 \
   --reverse --cycle --header="$header" \
   --preview="tmux capture-pane -ept {2}" --preview-window='right,62%,wrap' \
   --bind="ctrl-x:execute-silent(tmux kill-session -t {2})+reload($self --list '$scope')")
