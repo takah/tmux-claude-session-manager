@@ -11,8 +11,9 @@ end up with a dozen of them and no way to tell which are finished without openin
 each one. This plugin gives you:
 
 - 🔢 **A central picker** (`prefix` + `u`) listing every running Claude session.
-- 🟢 **Live status** per session — `working` / `waiting` / `idle` — driven by
-  Claude Code hooks, so you instantly see which need you.
+- 🟢 **Live status** per session — `working` / `waiting` / `idle` — read straight
+  from each session's screen every time the picker opens, so it's never stale and
+  needs no setup.
 - 👁️ **A live preview** of each session's screen right in the picker.
 - 🎯 **Smart jump** — selecting a session switches your client to the window it
   was launched from, then resumes it in a popup over it.
@@ -20,8 +21,8 @@ each one. This plugin gives you:
   current directory.
 - ❌ **Quick kill** (`ctrl-x`) of finished sessions from the picker.
 
-Status is optional: without the hooks the picker still lists, previews, jumps,
-and kills — sessions just show `?` instead of a color.
+Status works out of the box — no hooks required. The optional hooks below only
+add a recency timestamp (the age column / "just finished" sorting).
 
 ## Prerequisites
 
@@ -74,13 +75,17 @@ Inside the picker:
 
 Sessions needing your attention (`waiting`, `idle`) sort to the top.
 
-## Status setup (optional, recommended)
+## Recency timestamps (optional)
 
-Status comes from [Claude Code hooks](https://code.claude.com/docs/en/hooks)
-that stamp each session's state onto its tmux session. Add the following to your
-Claude Code settings (`~/.claude/settings.json`), merging into any existing
-`hooks` block. Adjust the path if your plugins live elsewhere (e.g.
-`~/.tmux/plugins/...`):
+The `working` / `waiting` / `idle` color is derived live from each session's pane
+when the picker opens — no setup needed (see [How it works](#how-it-works)).
+
+The optional [Claude Code hooks](https://code.claude.com/docs/en/hooks) below
+only stamp a `@claude_state_at` timestamp on each session, which powers the **age
+column** and the "just finished floats to the top" sorting. Without them, status
+still works; the age column just shows `-`. Add the following to your Claude Code
+settings (`~/.claude/settings.json`), merging into any existing `hooks` block.
+Adjust the path if your plugins live elsewhere (e.g. `~/.tmux/plugins/...`):
 
 ```json
 {
@@ -133,18 +138,12 @@ Claude Code settings (`~/.claude/settings.json`), merging into any existing
 }
 ```
 
-The state machine:
-
-| Event                            | State        | Meaning                   |
-| -------------------------------- | ------------ | ------------------------- |
-| `UserPromptSubmit`               | 🔴 `working` | Busy — leave it           |
-| `Notification` (permission)      | 🟡 `waiting` | Needs permission          |
-| `PreToolUse` (`AskUserQuestion`) | 🟡 `waiting` | Asking you a question     |
-| `Stop`                           | 🟢 `idle`    | Turn finished — your move |
+Each event just refreshes the timestamp; the displayed color itself comes from
+the live pane read, not from these events.
 
 > Claude Code reloads `hooks` dynamically — no restart needed. Sessions that are
-> already running start reporting status on their next event once the hooks are
-> added.
+> already running start stamping timestamps on their next event once the hooks
+> are added.
 
 ## Options
 
@@ -164,11 +163,16 @@ set -g @claude_popup_height    '90%'     # popup height
 - The **launcher** creates a detached `c-<dir-name>` tmux session running
   `claude`, records the window it came from in `@claude_origin`, and attaches to
   it in a popup.
-- The **hooks** set `@claude_state` / `@claude_state_at` on each session as Claude
-  works.
-- The **picker** lists sessions matching the prefix, reads their state and a live
-  `capture-pane` preview, and on selection moves your client to the session's
-  origin window before resuming it in the popup.
+- The **picker** lists sessions matching the prefix and, for each, derives the
+  `working` / `waiting` / `idle` status by reading the session's pane with
+  `capture-pane` (the footer line — `esc to interrupt` → working, a
+  `Do you want to proceed?` / `Esc to cancel` modal → waiting, else idle). This is
+  read fresh on every open, so it can't go stale the way a cached hook state
+  would. On selection it moves your client to the session's origin window before
+  resuming it in the popup.
+- The optional **hooks** only stamp `@claude_state_at` (used for the age column
+  and recency sort); when a pane can't be read, the picker falls back to the
+  hook-recorded `@claude_state`.
 - Pressing `prefix` + `u` **from inside a session popup** detaches that popup
   first (closing it), then reopens the picker full-size on the outer host client —
   so you never end up with a cramped popup-in-popup.
