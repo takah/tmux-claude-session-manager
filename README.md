@@ -157,6 +157,7 @@ set -g @claude_session_prefix 'c-'       # tmux session name prefix
 set -g @claude_popup_width     '90%'     # popup width
 set -g @claude_popup_height    '90%'     # popup height
 set -g @claude_bell           'on'       # ring the bell when a session waits ('off' to disable)
+set -g @claude_status         'on'       # auto-add the waiting-count badge to status-right ('off' to disable)
 set -g @claude_waiting_icon   '⏳'       # prefix for the status-bar waiting count
 set -g @claude_waiting_style  'fg=colour231,bg=red,bold' # tmux style for the count (add ',blink', or 'none')
 ```
@@ -171,12 +172,10 @@ your SSH pty, so the bell travels back and rings your **local** terminal — not
 remote server — wherever you're attached from. It needs the `waiting` hooks (see
 above) and is on by default; disable with `set -g @claude_bell 'off'`.
 
-**Status-bar count** — show how many sessions are waiting right in your status
-line (nothing is shown when none are):
-
-```tmux
-set -ag status-right '#(~/.tmux/plugins/tmux-claude-session-manager/scripts/status.sh)'
-```
+**Status-bar count** — a badge counting how many sessions are waiting is added to
+`status-right` **automatically** (nothing is shown when none are). No config
+needed; the plugin appends it for you, idempotently. Disable with
+`set -g @claude_status 'off'`.
 
 The count is derived live from each session's pane (same logic as the picker) and
 refreshes on tmux's `status-interval`, so it never goes stale. It's emitted with a
@@ -185,7 +184,10 @@ customize it with `@claude_waiting_style` — e.g. add `,blink`, or set it to
 `none` for no styling.
 
 > A lower `status-interval` (e.g. `set -g status-interval 2`) makes both the count
-> and `blink` feel more responsive.
+> and `blink` feel more responsive. If you'd rather place the badge yourself
+> (e.g. on `status-left`), set `@claude_status 'off'` and add
+> `#(~/.tmux/plugins/tmux-claude-session-manager/scripts/status.sh)` where you want
+> it.
 
 ## How it works
 

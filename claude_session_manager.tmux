@@ -22,3 +22,21 @@ tmux bind-key "$launch_key" \
 # closes that popup first so the picker opens full-size on the outer client.
 tmux bind-key "$list_key" \
   run-shell "$CURRENT_DIR/scripts/list.sh '#{client_name}'"
+
+# Show a badge in the status bar counting sessions that are waiting for input.
+# We append it to status-right ourselves so it works out of the box — no config
+# needed. The append is idempotent (skipped if already present), so re-sourcing
+# or reinstalling won't duplicate it. Opt out with:  set -g @claude_status 'off'
+if [ "$(get_tmux_option @claude_status 'on')" != 'off' ]; then
+  status_cmd="#($CURRENT_DIR/scripts/status.sh)"
+  current="$(tmux show-option -gqv status-right)"
+  case "$current" in
+  *"$status_cmd"*) ;; # already wired (re-sourced) — leave it
+  *)
+    tmux set-option -g status-right "${current:+$current }$status_cmd"
+    # Keep the badge from being truncated by a tight status-right-length.
+    len="$(tmux show-option -gqv status-right-length)"
+    [ "${len:-0}" -lt 60 ] 2>/dev/null && tmux set-option -g status-right-length 60
+    ;;
+  esac
+fi
