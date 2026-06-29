@@ -11,6 +11,7 @@ CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 launch_key="$(get_tmux_option @claude_launch_key 'y')"
 list_key="$(get_tmux_option @claude_list_key 'u')"
+scoped_list_key="$(get_tmux_option @claude_scoped_list_key 'C-u')"
 
 # Launch (or re-attach to) a Claude session for the current pane's directory.
 # #{pane_current_path} / #{window_id} are expanded by run-shell before the args
@@ -22,6 +23,13 @@ tmux bind-key "$launch_key" \
 # closes that popup first so the picker opens full-size on the outer client.
 tmux bind-key "$list_key" \
   run-shell "$CURRENT_DIR/scripts/list.sh '#{client_name}'"
+
+# Open the picker scoped to the current pane's customer group (its parent dir,
+# grouped per @claude_customer_groups). Passing #{pane_current_path} tells
+# list.sh which customer to limit the list to — so you can show one customer
+# their sessions without others appearing on screen.
+tmux bind-key "$scoped_list_key" \
+  run-shell "$CURRENT_DIR/scripts/list.sh '#{client_name}' '#{pane_current_path}'"
 
 # Show a badge in the status bar counting sessions that are waiting for input.
 # We append it to status-right ourselves so it works out of the box — no config

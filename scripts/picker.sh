@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 # Interactive picker for running Claude sessions.
 #
-#   picker.sh           fzf picker; on enter, switches the parent client to the
-#                       chosen session's origin window and resumes it in the popup.
-#   picker.sh --list    print the rows only (used by fzf's ctrl-x reload).
+#   picker.sh [scope]          fzf picker; on enter, switches the parent client to
+#                              the chosen session's origin window and resumes it.
+#   picker.sh --list [scope]   print the rows only (used by fzf's ctrl-x reload).
+#
+# scope is an optional ERE of parent-dir names (e.g. 'linkbal|linkbal-x'). When
+# set, only sessions whose parent dir matches are listed AND previewed — a hard
+# filter so a customer never sees another customer's sessions on your screen.
 set -uo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=helpers.sh
@@ -15,17 +19,20 @@ prefix="$(get_tmux_option @claude_session_prefix 'c-')"
 # status-bar counter.
 
 emit_rows() {
+  local scope="${1:-}"
   local now s state at path name parent label icon rank ago
   now=$(date +%s)
   tmux list-sessions -F '#{session_name}' 2>/dev/null | grep "^${prefix}" | while IFS= read -r s; do
-    state=$(detect_state "$s")
-    at=$(tmux show-options -qv -t "$s" @claude_state_at 2>/dev/null)
     path=$(tmux display-message -p -t "$s" '#{pane_current_path}' 2>/dev/null)
-    # Paths share a common prefix, so show the dir name plus its parent's name to
-    # tell sessions apart: e.g. "api  myproject".
     name="${path##*/}"
     parent="${path%/*}"
     parent="${parent##*/}"
+    # Scoped picker: drop sessions outside the requested customer group entirely.
+    [ -n "$scope" ] && ! [[ "$parent" =~ ^($scope)$ ]] && continue
+    state=$(detect_state "$s")
+    at=$(tmux show-options -qv -t "$s" @claude_state_at 2>/dev/null)
+    # Paths share a common prefix, so show the dir name plus its parent's name to
+    # tell sessions apart: e.g. "api  myproject".
     label="$name  $parent"
     case "$state" in
     waiting) icon=$'\033[33m●\033[0m waiting' rank=0 ;; # yellow - needs input
@@ -43,9 +50,11 @@ emit_rows() {
 }
 
 [ "${1:-}" = '--list' ] && {
-  emit_rows
+  emit_rows "${2:-}"
   exit 0
 }
+
+scope="${1:-}"
 
 if ! command -v fzf >/dev/null 2>&1; then
   tmux display-message "tmux-claude-session-manager: fzf is required for the picker"
@@ -53,11 +62,13 @@ if ! command -v fzf >/dev/null 2>&1; then
 fi
 
 self="${BASH_SOURCE[0]}"
+header='Claude sessions · enter: jump · ctrl-x: kill'
+[ -n "$scope" ] && header="Claude · customer: ${scope//|/, } · enter: jump · ctrl-x: kill"
 export FZF_DEFAULT_OPTS=''
-sel=$(emit_rows | fzf --ansi --delimiter='\t' --with-nth=3,4,5 \
-  --reverse --cycle --header='Claude sessions · enter: jump · ctrl-x: kill' \
+sel=$(emit_rows "$scope" | fzf --ansi --delimiter='\t' --with-nth=3,4,5 \
+  --reverse --cycle --header="$header" \
   --preview="tmux capture-pane -ept {2}" --preview-window='right,62%,wrap' \
-  --bind="ctrl-x:execute-silent(tmux kill-session -t {2})+reload($self --list)")
+  --bind="ctrl-x:execute-silent(tmux kill-session -t {2})+reload($self --list '$scope')")
 
 [ -z "$sel" ] && exit 0
 target=$(printf '%s' "$sel" | cut -f2)

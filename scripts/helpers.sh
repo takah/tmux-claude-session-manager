@@ -42,3 +42,28 @@ detect_state() {
   *) echo idle ;;
   esac
 }
+
+# customer_group <parent-dir-name>  ->  ERE alternation of the dirs in its group
+# Sessions live at .../<parent>/<project>; the parent dir is the "customer". To
+# treat several parent dirs as one customer (e.g. linkbal + linkbal-x), list them
+# in @claude_customer_groups: comma-separated groups, space-separated members.
+# A dir not in any group is its own singleton. Used to scope the picker.
+#   @claude_customer_groups = 'linkbal linkbal-x'
+#     customer_group linkbal -> 'linkbal|linkbal-x'   customer_group takah -> 'takah'
+customer_group() {
+  local target="$1" spec line members
+  spec="$(get_tmux_option @claude_customer_groups '')"
+  while IFS= read -r line; do
+    members="$(printf '%s' "$line" | xargs)"
+    [ -n "$members" ] || continue
+    case " $members " in
+    *" $target "*)
+      printf '%s' "$members" | tr ' ' '|'
+      return
+      ;;
+    esac
+  done <<EOF
+$(printf '%s' "$spec" | tr ',' '\n')
+EOF
+  printf '%s' "$target"
+}
