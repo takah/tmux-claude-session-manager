@@ -18,26 +18,35 @@ client_session() { # client_session <client-name> -> its attached session name
     awk -v c="$1" '$1 == c { print $2; exit }'
 }
 
-# A client NOT attached to a prefixed session — fallback host used only when the
-# key was pressed from inside a popup (so the invoker itself is going away).
+# The outer client to host the picker on when the key was pressed from inside a
+# popup. tmux doesn't record which client spawned a popup, so we infer it: the
+# popup overlays the terminal you're physically at, and that terminal's client
+# reports 'focused' too — so prefer the focused non-popup client. Fall back to
+# the first non-popup client when the terminal doesn't report focus. (With one
+# client attached, both passes resolve to it.)
 host_client() {
-  tmux list-clients -F '#{client_name} #{session_name}' 2>/dev/null |
-    awk -v p="$prefix" 'index($2, p) != 1 { print $1; exit }'
+  local clients host
+  clients="$(tmux list-clients -F '#{client_name} #{session_name} #{client_flags}' 2>/dev/null)"
+  host="$(printf '%s\n' "$clients" |
+    awk -v p="$prefix" 'index($2, p) != 1 && $3 ~ /focused/ { print $1; exit }')"
+  [ -n "$host" ] || host="$(printf '%s\n' "$clients" |
+    awk -v p="$prefix" 'index($2, p) != 1 { print $1; exit }')"
+  printf '%s' "$host"
 }
 
 if [ -n "$invoker" ] && [[ "$(client_session "$invoker")" != "$prefix"* ]]; then
   # Pressed from a normal (non-popup) pane: host on that very client.
   host="$invoker"
 else
-  # Pressed from inside a session popup: close that popup so the picker can open
-  # full-size on the outer client. tmux doesn't record which outer client spawned
-  # the popup, so fall back to the first non-popup client (best effort).
+  # Pressed from inside a session popup: resolve the outer client *before*
+  # closing the popup (focus is reported while the popup is still up), then
+  # detach the popup so the picker can open full-size on that outer client.
+  host="$(host_client)"
   [ -n "$invoker" ] && tmux detach-client -t "$invoker" 2>/dev/null
   for _ in $(seq 1 100); do
     tmux list-clients -F '#{client_name}' 2>/dev/null | grep -qxF "$invoker" || break
     sleep 0.05
   done
-  host="$(host_client)"
 fi
 
 tmux set-option -g @claude_parent "$host"
