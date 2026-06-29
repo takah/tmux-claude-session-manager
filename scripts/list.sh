@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Open the session picker in a popup, on the client that invoked the binding.
+#   list.sh <client> [scope-path]
+# When scope-path (a directory) is given, the picker is hard-scoped to the
+# customer group that path's parent dir belongs to — used by the scoped binding
+# so you only show one customer's sessions while sharing your screen.
 set -uo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=helpers.sh
@@ -8,6 +12,13 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 prefix="$(get_tmux_option @claude_session_prefix 'c-')"
 w="$(get_tmux_option @claude_popup_width '90%')"
 h="$(get_tmux_option @claude_popup_height '90%')"
+
+# Derive the customer scope from the invoking pane's directory, if requested.
+scope_path="${2:-}"
+scope=""
+if [ -n "$scope_path" ]; then
+  scope="$(customer_group "$(basename "$(dirname "$scope_path")")")"
+fi
 
 # The client that pressed the key, passed as #{client_name} by the binding. We
 # host the popup on THIS client so it always appears on the terminal you pressed
@@ -52,9 +63,10 @@ fi
 tmux set-option -g @claude_parent "$host"
 
 # -c is honored because the host client has no popup open now; fall back to the
-# default client if none was resolved.
+# default client if none was resolved. The scope is single-quoted so its '|' is
+# passed through to picker.sh intact.
 if [ -n "$host" ]; then
-  tmux display-popup -c "$host" -w "$w" -h "$h" -E "$DIR/picker.sh"
+  tmux display-popup -c "$host" -w "$w" -h "$h" -E "$DIR/picker.sh '$scope'"
 else
-  tmux display-popup -w "$w" -h "$h" -E "$DIR/picker.sh"
+  tmux display-popup -w "$w" -h "$h" -E "$DIR/picker.sh '$scope'"
 fi
