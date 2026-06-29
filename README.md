@@ -64,7 +64,7 @@ run-shell ~/clone/path/claude_session_manager.tmux
 | ---------------- | ------------------------------------------------------------------------------- |
 | `prefix` + `y`   | Launch (or re-attach to) a Claude session for the current directory, in a popup |
 | `prefix` + `u`   | Open the session picker (all sessions)                                          |
-| `prefix` + `C-u` | Open the picker scoped to the current pane's customer (see below)               |
+| `prefix` + `C-u` | Open the picker scoped to the current pane's dir group (see below)               |
 
 Inside the picker:
 
@@ -76,28 +76,28 @@ Inside the picker:
 
 Sessions needing your attention (`waiting`, `idle`) sort to the top.
 
-## Per-customer scoping
+## Scoped picker (dir groups)
 
-When you share your screen with a customer, you don't want their session list to
-include other customers. `prefix` + `C-u` opens the picker **hard-scoped** to the
-customer of the pane you're in — only that customer's sessions are listed *and
+When you share your screen, you may not want every session in the list — e.g.
+work for other clients. `prefix` + `C-u` opens the picker **hard-scoped** to the
+dir group of the pane you're in — only that group's sessions are listed *and
 previewed*, so nothing else can appear on screen. (It's a real filter at the
 source, not fzf's type-to-filter, which would still flash the full list.)
 
-A session's customer is the **parent directory** of its path — sessions live at
-`…/<parent>/<project>`, so `…/acme/web` and `…/acme/api` are both customer
-`acme`. To treat several parent dirs as one customer, group them in
-`@claude_customer_groups` (comma-separated groups, space-separated members);
-any dir not listed is its own customer:
+The grouping key is the **parent directory** of a session's path — sessions live
+at `…/<parent>/<project>`, so `…/acme/web` and `…/acme/api` are both in group
+`acme`. To treat several parent dirs as one group, list them in
+`@claude_dir_groups` (comma-separated groups, space-separated members); any dir
+not listed is its own singleton group:
 
 ```tmux
-# 'acme' and 'acme-labs' are the same customer; everything else stands alone
-set -g @claude_customer_groups 'acme acme-labs'
+# 'acme' and 'acme-labs' are one group; everything else stands alone
+set -g @claude_dir_groups 'acme acme-labs'
 ```
 
-The picker's header shows which customer you're scoped to. Invoke `prefix` + `C-u`
-from inside a customer's session (or from a shell sitting in their project) so it
-can read the directory. Rebind it with `@claude_scoped_list_key`.
+The picker's header shows which dir group you're scoped to. Invoke `prefix` +
+`C-u` from inside one of that group's sessions (or from a shell sitting in such a
+project) so it can read the directory. Rebind it with `@claude_scoped_list_key`.
 
 ## Recency timestamps (optional)
 
@@ -176,8 +176,8 @@ Set any of these before the plugin loads (defaults shown):
 ```tmux
 set -g @claude_launch_key     'y'        # prefix key: launch/open for current dir
 set -g @claude_list_key       'u'        # prefix key: open the picker
-set -g @claude_scoped_list_key 'C-u'     # prefix key: open the picker scoped to the current customer
-set -g @claude_customer_groups ''        # merge parent dirs into one customer, e.g. 'linkbal linkbal-x'
+set -g @claude_scoped_list_key 'C-u'     # prefix key: open the picker scoped to the current dir group
+set -g @claude_dir_groups      ''        # merge parent dirs into one group, e.g. 'linkbal linkbal-x'
 set -g @claude_command        'claude'   # command run in new sessions
 set -g @claude_session_prefix 'c-'       # tmux session name prefix
 set -g @claude_popup_width     '90%'     # popup width

@@ -24,10 +24,10 @@ tmux bind-key "$launch_key" \
 tmux bind-key "$list_key" \
   run-shell "$CURRENT_DIR/scripts/list.sh '#{client_name}'"
 
-# Open the picker scoped to the current pane's customer group (its parent dir,
-# grouped per @claude_customer_groups). Passing #{pane_current_path} tells
-# list.sh which customer to limit the list to — so you can show one customer
-# their sessions without others appearing on screen.
+# Open the picker scoped to the current pane's dir group (its parent dir,
+# grouped per @claude_dir_groups). Passing #{pane_current_path} tells list.sh
+# which group to limit the list to — so you can show one group's sessions
+# without others appearing on screen.
 tmux bind-key "$scoped_list_key" \
   run-shell "$CURRENT_DIR/scripts/list.sh '#{client_name}' '#{pane_current_path}'"
 
