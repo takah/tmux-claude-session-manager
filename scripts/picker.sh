@@ -7,7 +7,7 @@
 #
 # scope is an optional ERE of parent-dir names (e.g. 'linkbal|linkbal-x'). When
 # set, only sessions whose parent dir matches are listed AND previewed — a hard
-# filter so a customer never sees another customer's sessions on your screen.
+# filter so other dir groups never show on your screen (e.g. during a screen-share).
 set -uo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=helpers.sh
@@ -27,7 +27,7 @@ emit_rows() {
     name="${path##*/}"
     parent="${path%/*}"
     parent="${parent##*/}"
-    # Scoped picker: drop sessions outside the requested customer group entirely.
+    # Scoped picker: drop sessions outside the requested dir group entirely.
     [ -n "$scope" ] && ! [[ "$parent" =~ ^($scope)$ ]] && continue
     state=$(detect_state "$s")
     at=$(tmux show-options -qv -t "$s" @claude_state_at 2>/dev/null)
@@ -63,7 +63,7 @@ fi
 
 self="${BASH_SOURCE[0]}"
 header='Claude sessions · enter: jump · ctrl-x: kill'
-[ -n "$scope" ] && header="Claude · customer: ${scope//|/, } · enter: jump · ctrl-x: kill"
+[ -n "$scope" ] && header="Claude · dir: ${scope//|/, } · enter: jump · ctrl-x: kill"
 export FZF_DEFAULT_OPTS=''
 sel=$(emit_rows "$scope" | fzf --ansi --delimiter='\t' --with-nth=3,4,5 \
   --reverse --cycle --header="$header" \

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Open the session picker in a popup, on the client that invoked the binding.
 #   list.sh <client> [scope-path]
-# When scope-path (a directory) is given, the picker is hard-scoped to the
-# customer group that path's parent dir belongs to — used by the scoped binding
-# so you only show one customer's sessions while sharing your screen.
+# When scope-path (a directory) is given, the picker is hard-scoped to the dir
+# group that path's parent dir belongs to — used by the scoped binding so you
+# only show one group's sessions while sharing your screen.
 set -uo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=helpers.sh
@@ -13,11 +13,11 @@ prefix="$(get_tmux_option @claude_session_prefix 'c-')"
 w="$(get_tmux_option @claude_popup_width '90%')"
 h="$(get_tmux_option @claude_popup_height '90%')"
 
-# Derive the customer scope from the invoking pane's directory, if requested.
+# Derive the scope (a dir group) from the invoking pane's directory, if requested.
 scope_path="${2:-}"
 scope=""
 if [ -n "$scope_path" ]; then
-  scope="$(customer_group "$(basename "$(dirname "$scope_path")")")"
+  scope="$(dir_group "$(basename "$(dirname "$scope_path")")")"
 fi
 
 # The client that pressed the key, passed as #{client_name} by the binding. We
