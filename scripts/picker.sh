@@ -11,29 +11,8 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 prefix="$(get_tmux_option @claude_session_prefix 'c-')"
 
-# Derive a session's live state from what Claude is actually showing in its pane,
-# rather than trusting the last hook event (which goes stale: e.g. a permission
-# prompt sets `waiting`, but nothing flips it back to `working` once you approve).
-# The footer line is the reliable signal — checked working-first so a working
-# pane is never misread as a stale prompt scrolled above it:
-#   "esc to interrupt"                      -> working (turn is actively running)
-#   "Do you want to proceed?" / "Esc to cancel" -> waiting (permission / question modal)
-#   otherwise                               -> idle    (input-ready, turn finished)
-# capture-pane reads the server-side screen even for detached sessions and costs
-# ~2ms each. If capture yields nothing, fall back to the hook-recorded state.
-detect_state() {
-  local pane
-  pane=$(tmux capture-pane -p -t "$1" 2>/dev/null)
-  if [ -z "$pane" ]; then
-    tmux show-options -qv -t "$1" @claude_state 2>/dev/null
-    return
-  fi
-  case "$pane" in
-  *"esc to interrupt"*) echo working ;;
-  *"Do you want to proceed?"* | *"Esc to cancel"*) echo waiting ;;
-  *) echo idle ;;
-  esac
-}
+# detect_state (live status from the pane) lives in helpers.sh, shared with the
+# status-bar counter.
 
 emit_rows() {
   local now s state at path name parent label icon rank ago
