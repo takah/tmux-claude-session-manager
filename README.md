@@ -1,10 +1,11 @@
 # tmux-claude-session-manager
 
-[![screenshot](./docs/screenshot.jpg)](https://youtu.be/NnTV6r4l5D0)
-
 Run many [Claude Code](https://claude.com/claude-code) sessions across your
 projects, each in its own tmux session — then **list them, see which are done
 vs. still working, and jump to one** from a single popup.
+
+> A fork of [craftzdog/tmux-claude-session-manager](https://github.com/craftzdog/tmux-claude-session-manager)
+> that has since gone its own way — see [Origin & differences](#origin--differences).
 
 If you launch Claude per-directory (one nested session per project), you quickly
 end up with a dozen of them and no way to tell which are finished without opening
@@ -15,6 +16,10 @@ each one. This plugin gives you:
   from each session's screen every time the picker opens, so it's never stale and
   needs no setup.
 - 👁️ **A live preview** of each session's screen right in the picker.
+- 🔔 **Waiting alerts** — a terminal bell and a status-bar badge when a session
+  needs you, even while it's backgrounded.
+- 🔒 **A scoped picker** (`prefix` + `C-u`) that hard-limits the list to one
+  directory group — handy when you're sharing your screen.
 - 🎯 **Smart jump** — selecting a session switches your client to the window it
   was launched from, then resumes it in a popup over it.
 - 🚀 **A launcher** (`prefix` + `y`) that opens/attaches a Claude session for the
@@ -23,6 +28,37 @@ each one. This plugin gives you:
 
 Status works out of the box — no hooks required. The optional hooks below only
 add a recency timestamp (the age column / "just finished" sorting).
+
+## Origin & differences
+
+This began as a fork of **craftzdog/tmux-claude-session-manager** by
+[Takuya Matsuyama](https://github.com/craftzdog) — thanks to him for the original
+idea and groundwork. It has since diverged enough to be its own thing. I'm
+maintaining it for my own workflow and **don't plan to send these changes back
+upstream**, so expect the two to keep drifting apart.
+
+What's different from the original:
+
+- **Live status from the pane.** Status is derived by reading each session's
+  screen on demand (`capture-pane`), not from cached hook state. It can't go
+  stale, and it works with no hooks configured at all. (Upstream relied on hooks
+  to push `working`/`waiting`/`idle`, which got stuck once a transition was
+  missed.)
+- **Session naming.** Sessions are `c-<dir-name>` (a readable prefix + directory
+  name) instead of a path hash, and the picker labels each by its directory and
+  parent rather than the full path.
+- **Multi-client correctness.** The picker opens on the terminal that pressed the
+  key — and when invoked from inside a popup, it reopens on the *focused*
+  terminal — so it behaves correctly even with several clients attached to the
+  same tmux server.
+- **Waiting alerts.** A terminal bell rings your *local* terminal (over SSH) when
+  a session starts waiting, and a status-bar badge counts how many sessions are
+  waiting. The badge is wired into `status-right` automatically.
+- **Scoped picker (dir groups).** `prefix` + `C-u` hard-scopes the list to the
+  current directory group, so other groups never appear on screen — useful during
+  a screen-share.
+- **Readable age.** The age column switches units as it grows (`45m` → `5h` →
+  `3d15h`) while still sorting chronologically.
 
 ## Prerequisites
 
@@ -36,20 +72,21 @@ add a recency timestamp (the age column / "just finished" sorting).
 Add to `~/.tmux.conf` (or `~/.config/tmux/tmux.conf`):
 
 ```tmux
-set -g @plugin 'craftzdog/tmux-claude-session-manager'
+set -g @plugin 'takah/tmux-claude-session-manager'
 ```
 
 Then hit `prefix` + <kbd>I</kbd> to install.
 
-> **Keybinding note:** by default the plugin binds `prefix` + `y` (launch) and
-> `prefix` + `u` (list). If your config binds those elsewhere, either change the
-> options below, or make sure the plugin loads **after** your own bindings (put
-> `run '~/.tmux/plugins/tpm/tpm'` _after_ them) so the one you want wins.
+> **Keybinding note:** by default the plugin binds `prefix` + `y` (launch),
+> `prefix` + `u` (list) and `prefix` + `C-u` (scoped list). If your config binds
+> those elsewhere, either change the options below, or make sure the plugin loads
+> **after** your own bindings (put `run '~/.tmux/plugins/tpm/tpm'` _after_ them)
+> so the one you want wins.
 
 ### Manual install
 
 ```sh
-git clone https://github.com/craftzdog/tmux-claude-session-manager ~/clone/path
+git clone https://github.com/takah/tmux-claude-session-manager ~/clone/path
 ```
 
 Add to `~/.tmux.conf`, then reload (`prefix` + <kbd>r</kbd> or `tmux source ~/.tmux.conf`):
@@ -64,7 +101,7 @@ run-shell ~/clone/path/claude_session_manager.tmux
 | ---------------- | ------------------------------------------------------------------------------- |
 | `prefix` + `y`   | Launch (or re-attach to) a Claude session for the current directory, in a popup |
 | `prefix` + `u`   | Open the session picker (all sessions)                                          |
-| `prefix` + `C-u` | Open the picker scoped to the current pane's dir group (see below)               |
+| `prefix` + `C-u` | Open the picker scoped to the current pane's dir group (see below)              |
 
 Inside the picker:
 
@@ -163,7 +200,8 @@ Adjust the path if your plugins live elsewhere (e.g. `~/.tmux/plugins/...`):
 ```
 
 Each event just refreshes the timestamp; the displayed color itself comes from
-the live pane read, not from these events.
+the live pane read, not from these events. The `waiting` events also drive the
+terminal bell (see below).
 
 > Claude Code reloads `hooks` dynamically — no restart needed. Sessions that are
 > already running start stamping timestamps on their next event once the hooks
@@ -228,12 +266,14 @@ customize it with `@claude_waiting_style` — e.g. add `,blink`, or set it to
   would. On selection it moves your client to the session's origin window before
   resuming it in the popup.
 - The optional **hooks** only stamp `@claude_state_at` (used for the age column
-  and recency sort); when a pane can't be read, the picker falls back to the
-  hook-recorded `@claude_state`.
-- Pressing `prefix` + `u` **from inside a session popup** detaches that popup
-  first (closing it), then reopens the picker full-size on the outer host client —
-  so you never end up with a cramped popup-in-popup.
+  and recency sort) and drive the bell; when a pane can't be read, the picker
+  falls back to the hook-recorded `@claude_state`.
+- Pressing the list key **from inside a session popup** detaches that popup first
+  (closing it), then reopens the picker full-size on the *focused* outer terminal
+  — so you never end up with a cramped popup-in-popup, and it lands on the screen
+  you're actually looking at.
 
 ## License
 
-[MIT](LICENSE) © Takuya Matsuyama
+[MIT](LICENSE). Original work © Takuya Matsuyama; fork modifications ©
+Takahiko Horiuchi.
