@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Launch (or re-attach to) a Claude session for a directory, shown in a popup.
-# Args: <dir> [origin-window-id]   (both expanded by run-shell in the binding)
+# Args: <dir> [origin-window-id] [client]  (expanded by run-shell in the binding)
 set -uo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=helpers.sh
@@ -8,6 +8,7 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 path="${1:-$PWD}"
 window="${2:-}"
+client="${3:-}"
 
 prefix="$(get_tmux_option @claude_session_prefix 'c-')"
 cmd="$(get_tmux_option @claude_command 'claude')"
@@ -26,5 +27,11 @@ tmux has-session -t "$session" 2>/dev/null ||
 
 # Record which window launched it, so the picker can jump back here later.
 [ -n "$window" ] && tmux set-option -t "$session" @claude_origin "$window"
+
+# Record the client that opened this popup, so `prefix + u` pressed from inside
+# it can reopen the picker on that exact terminal — tmux doesn't otherwise link a
+# popup to its parent client, and guessing breaks when several clients share the
+# session (or all report `focused`).
+[ -n "$client" ] && tmux set-option -t "$session" @claude_popup_parent "$client"
 
 tmux display-popup -w "$w" -h "$h" -E "tmux attach-session -t $session"

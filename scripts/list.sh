@@ -29,38 +29,75 @@ client_session() { # client_session <client-name> -> its attached session name
     awk -v c="$1" '$1 == c { print $2; exit }'
 }
 
-# The outer client to host the picker on when the key was pressed from inside a
-# popup. tmux doesn't record which client spawned a popup, so we infer it: the
-# popup overlays the terminal you're physically at, and that terminal's client
-# reports 'focused' too — so prefer the focused non-popup client. Fall back to
-# the first non-popup client when the terminal doesn't report focus. (With one
-# client attached, both passes resolve to it.)
-host_client() {
-  local clients host
-  clients="$(tmux list-clients -F '#{client_name} #{session_name} #{client_flags}' 2>/dev/null)"
-  host="$(printf '%s\n' "$clients" |
-    awk -v p="$prefix" 'index($2, p) != 1 && $3 ~ /focused/ { print $1; exit }')"
-  [ -n "$host" ] || host="$(printf '%s\n' "$clients" |
-    awk -v p="$prefix" 'index($2, p) != 1 { print $1; exit }')"
-  printf '%s' "$host"
+# parent_is_live <client> — true if <client> is a currently-attached client that
+# sits on a NORMAL (non-prefix) session. This is how we confirm a recorded
+# @claude_popup_parent still refers to a real outer terminal, and reject a stale
+# value whose client name has since been reused by another (e.g. c-) client.
+parent_is_live() {
+  tmux list-clients -F '#{client_name} #{session_name}' 2>/dev/null |
+    awk -v c="$1" -v p="$prefix" '$1 == c && index($2, p) != 1 { ok = 1 } END { exit !ok }'
 }
+
+# One-shot hints handed to picker.sh for the direct-attach case (see below).
+host=""
+restore_to=""   # session to send the client back to if the picker is cancelled
+landing_session=""  # throwaway session we created only to host the picker
 
 if [ -n "$invoker" ] && [[ "$(client_session "$invoker")" != "$prefix"* ]]; then
   # Pressed from a normal (non-popup) pane: host on that very client.
   host="$invoker"
 else
-  # Pressed from inside a session popup: resolve the outer client *before*
-  # closing the popup (focus is reported while the popup is still up), then
-  # detach the popup so the picker can open full-size on that outer client.
-  host="$(host_client)"
-  [ -n "$invoker" ] && tmux detach-client -t "$invoker" 2>/dev/null
-  for _ in $(seq 1 100); do
-    tmux list-clients -F '#{client_name}' 2>/dev/null | grep -qxF "$invoker" || break
-    sleep 0.05
-  done
+  # Attached to a c- session. Two situations look identical here, so tell them
+  # apart deterministically via @claude_popup_parent (launch.sh records it when it
+  # opens a popup; a direct `tmux a` never runs launch.sh so it is absent/stale).
+  orig="$(client_session "$invoker")"
+  parent="$(tmux show-option -qv -t "$orig" @claude_popup_parent 2>/dev/null)"
+  if [ -n "$parent" ] && [ "$parent" != "$invoker" ] && parent_is_live "$parent"; then
+    # Inside a session popup: the recorded parent is still your real terminal.
+    # Close this popup and reopen the picker full-size over it. Resolve the host
+    # *before* detaching so we don't lose the reference.
+    host="$parent"
+    tmux detach-client -t "$invoker" 2>/dev/null
+    for _ in $(seq 1 100); do
+      tmux list-clients -F '#{client_name}' 2>/dev/null | grep -qxF "$invoker" || break
+      sleep 0.05
+    done
+  elif [ -n "$invoker" ]; then
+    # Attached directly (e.g. `tmux a` landed on a c- session): there is no outer
+    # terminal, so detaching would drop you out of tmux entirely. Instead park
+    # THIS client on a normal (non-c-) session — creating one, seeded with the c-
+    # session's cwd, if none exist — and open the picker there just like a normal
+    # pane. picker.sh sends the client back to `orig` if you cancel.
+    normal="$(tmux list-sessions -F '#{session_name}' 2>/dev/null |
+      awk -v p="$prefix" 'index($0, p) != 1 { print; exit }')"
+    if [ -z "$normal" ]; then
+      cwd="$(tmux display-message -p -t "$invoker" '#{pane_current_path}' 2>/dev/null)"
+      if [ -n "$cwd" ]; then
+        normal="$(tmux new-session -d -P -F '#{session_name}' -c "$cwd")"
+      else
+        normal="$(tmux new-session -d -P -F '#{session_name}')"
+      fi
+      landing_session="$normal"
+    fi
+    tmux switch-client -c "$invoker" -t "$normal" 2>/dev/null
+    host="$invoker"
+    restore_to="$orig"
+  fi
 fi
 
 tmux set-option -g @claude_parent "$host"
+# Fresh each run: set the direct-attach hints, or clear any left by a prior run so
+# a normal/popup invocation never inherits a stale restore target.
+if [ -n "$restore_to" ]; then
+  tmux set-option -g @claude_restore_to "$restore_to"
+else
+  tmux set-option -gu @claude_restore_to 2>/dev/null
+fi
+if [ -n "$landing_session" ]; then
+  tmux set-option -g @claude_landing_session "$landing_session"
+else
+  tmux set-option -gu @claude_landing_session 2>/dev/null
+fi
 
 # -c is honored because the host client has no popup open now; fall back to the
 # default client if none was resolved. The scope is single-quoted so its '|' is
