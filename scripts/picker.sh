@@ -119,5 +119,12 @@ origin=$(tmux show-options -qv -t "$target" @claude_origin 2>/dev/null)
 [ -n "$origin" ] && [ -n "$parent" ] &&
   tmux switch-client -c "$parent" -t "$origin" 2>/dev/null
 
+# Record the outer client as this session's popup parent — the same thing
+# launch.sh does when it opens a session popup. Without it, a session entered via
+# the picker has no @claude_popup_parent, so `prefix + u` pressed from inside it
+# is misread as a direct attach and stacks a THIRD popup instead of closing this
+# one and reopening the picker on the outer terminal.
+[ -n "$parent" ] && tmux set-option -t "$target" @claude_popup_parent "$parent"
+
 drop_landing
 tmux attach-session -t "$target"
