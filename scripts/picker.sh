@@ -86,15 +86,38 @@ sel=$(emit_rows "$scope" | fzf --ansi --delimiter='\t' --with-nth=4,5,6 \
   --preview="tmux capture-pane -ept {2}" --preview-window='right,62%,wrap' \
   --bind="ctrl-x:execute-silent(tmux kill-session -t {2})+reload($self --list '$scope')")
 
-[ -z "$sel" ] && exit 0
+# Consume the one-shot hints list.sh may have left for the direct-attach case, so
+# they never leak into a later invocation.
+parent=$(tmux show-options -gqv @claude_parent 2>/dev/null)
+restore=$(tmux show-options -gqv @claude_restore_to 2>/dev/null)
+landing=$(tmux show-options -gqv @claude_landing_session 2>/dev/null)
+tmux set-option -gu @claude_restore_to 2>/dev/null
+tmux set-option -gu @claude_landing_session 2>/dev/null
+
+# Kill the throwaway session list.sh created solely to host this picker, once no
+# client is left on it. No-op unless we created one — it never touches a
+# pre-existing session.
+drop_landing() {
+  [ -n "$landing" ] || return 0
+  tmux list-clients -F '#{session_name}' 2>/dev/null | grep -qxF "$landing" && return 0
+  tmux kill-session -t "$landing" 2>/dev/null
+}
+
+if [ -z "$sel" ]; then
+  # Cancelled. In the direct-attach case we parked the client on a normal session
+  # to open this picker; send it back where it came from before dropping the temp.
+  [ -n "$restore" ] && tmux switch-client -c "$parent" -t "$restore" 2>/dev/null
+  drop_landing
+  exit 0
+fi
 target=$(printf '%s' "$sel" | cut -f2)
 
 # Move the underlying parent client to the session's origin window (best-effort),
 # then resume the session in THIS popup over it. Falls back to resuming over the
 # current window when origin/parent are unknown.
 origin=$(tmux show-options -qv -t "$target" @claude_origin 2>/dev/null)
-parent=$(tmux show-options -gqv @claude_parent 2>/dev/null)
 [ -n "$origin" ] && [ -n "$parent" ] &&
   tmux switch-client -c "$parent" -t "$origin" 2>/dev/null
 
+drop_landing
 tmux attach-session -t "$target"
