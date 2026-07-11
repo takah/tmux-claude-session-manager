@@ -16,20 +16,25 @@ scoped_list_key="$(get_tmux_option @claude_scoped_list_key 'C-u')"
 # Launch (or re-attach to) a Claude session for the current pane's directory.
 # #{pane_current_path} / #{window_id} are expanded by run-shell before the args
 # reach the script.
+#
+# -b runs the job detached from the invoking client. These scripts detach or
+# switch that very client (to close a popup or hop off a c- session), which would
+# otherwise SIGHUP the still-running foreground job and make tmux flash a stray
+# "returned 129" view. Backgrounding keeps the job alive and silent.
 tmux bind-key "$launch_key" \
-  run-shell "$CURRENT_DIR/scripts/launch.sh '#{pane_current_path}' '#{window_id}' '#{client_name}'"
+  run-shell -b "$CURRENT_DIR/scripts/launch.sh '#{pane_current_path}' '#{window_id}' '#{client_name}'"
 
 # Open the session picker. When pressed from inside a session popup, list.sh
 # closes that popup first so the picker opens full-size on the outer client.
 tmux bind-key "$list_key" \
-  run-shell "$CURRENT_DIR/scripts/list.sh '#{client_name}'"
+  run-shell -b "$CURRENT_DIR/scripts/list.sh '#{client_name}'"
 
 # Open the picker scoped to the current pane's dir group (its parent dir,
 # grouped per @claude_dir_groups). Passing #{pane_current_path} tells list.sh
 # which group to limit the list to — so you can show one group's sessions
 # without others appearing on screen.
 tmux bind-key "$scoped_list_key" \
-  run-shell "$CURRENT_DIR/scripts/list.sh '#{client_name}' '#{pane_current_path}'"
+  run-shell -b "$CURRENT_DIR/scripts/list.sh '#{client_name}' '#{pane_current_path}'"
 
 # Show a badge in the status bar counting sessions that are waiting for input.
 # We append it to status-right ourselves so it works out of the box — no config

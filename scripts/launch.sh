@@ -35,3 +35,6 @@ tmux has-session -t "$session" 2>/dev/null ||
 [ -n "$client" ] && tmux set-option -t "$session" @claude_popup_parent "$client"
 
 tmux display-popup -w "$w" -h "$h" -E "tmux attach-session -t $session"
+
+# Don't surface the popup's exit status as a tmux "returned N" view.
+exit 0
