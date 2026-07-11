@@ -107,3 +107,7 @@ if [ -n "$host" ]; then
 else
   tmux display-popup -w "$w" -h "$h" -E "$DIR/picker.sh '$scope'"
 fi
+
+# Never let our own exit status surface as a tmux "returned N" view: the popup's
+# result (e.g. fzf cancelled) is not an error worth reporting to the user.
+exit 0
